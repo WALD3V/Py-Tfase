@@ -10,9 +10,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # ---------- CONFIGURACIÓN ----------
-RUTA_CSV = "data_ventasss.csv"     # Cambia este nombre si tu archivo tiene otro nombre
-COLUMNA_FECHA = "DATE"
-COLUMNA_VALOR = "CANT"
+RUTA_CSV = "Libro2.csv"     # Cambia este nombre si tu archivo tiene otro nombre
+COLUMNA_FECHA = "FECHA"
+COLUMNA_VALOR = "CANTIDAD"
 PERIODO_ESTACIONALIDAD = 12   # Cambia según tus datos (12 = mensual con patrón anual)
 
 # ---------- CARGA DE DATOS ----------

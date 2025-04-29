@@ -10,10 +10,10 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # ---------- CONFIGURACIÓN ----------
-RUTA_CSV = "Libro1.csv"     # Cambia este nombre si tu archivo tiene otro nombre
+RUTA_CSV = "DATANEW.csv"  # Cambia este nombre si tu archivo tiene otro nombre
 COLUMNA_FECHA = "FECHA"
 COLUMNA_VALOR = "CANTIDAD"
-PERIODO_ESTACIONALIDAD = 12   # Cambia según tus datos (12 = mensual con patrón anual)
+PERIODO_ESTACIONALIDAD = 7  # Estacionalidad semanal (7 días)
 
 # ---------- CARGA DE DATOS ----------
 # Cargar el archivo CSV, indicando el delimitador y que FECHA sea de tipo datetime
@@ -22,9 +22,11 @@ df = pd.read_csv(RUTA_CSV, sep=';', parse_dates=[COLUMNA_FECHA], index_col=COLUM
 # Ordenamos el DataFrame por la columna 'FECHA' (asegurando que está en orden cronológico)
 df.sort_index(inplace=True)
 
-# Usamos la columna 'CANTIDAD' para la serie temporal
 # Convertimos la columna CANTIDAD a numérico, forzando a NaN si no es numérico
 df[COLUMNA_VALOR] = pd.to_numeric(df[COLUMNA_VALOR], errors='coerce')
+
+# Eliminamos filas con valores NaN
+df.dropna(subset=[COLUMNA_VALOR], inplace=True)
 
 # ---------- FUNCIÓN: ESTACIONARIEDAD ----------
 def es_estacionaria(serie, alpha=0.05):
@@ -33,10 +35,10 @@ def es_estacionaria(serie, alpha=0.05):
         return resultado[1] < alpha  # p-value
     except Exception as e:
         print(f"Error al comprobar estacionariedad: {e}")
-        return False  # Si ocurre un error, asumimos que no es estacionaria
+        return False
 
 # ---------- FUNCIÓN: ESTACIONALIDAD ----------
-def tiene_estacionalidad(serie, periodo=12):
+def tiene_estacionalidad(serie, periodo=7):
     try:
         descomp = seasonal_decompose(serie, period=periodo, model='additive')
         var_serie = np.var(serie.dropna())
@@ -62,34 +64,38 @@ usar_sarima = tiene_estacionalidad(serie, periodo=PERIODO_ESTACIONALIDAD)
 try:
     if usar_sarima:
         print("Usando modelo SARIMA")
-        modelo = SARIMAX(serie, order=(1, d, 1), seasonal_order=(1, 1, 1, PERIODO_ESTACIONALIDAD))
+        modelo = SARIMAX(df[COLUMNA_VALOR], order=(1, d, 1), seasonal_order=(1, 1, 1, PERIODO_ESTACIONALIDAD))
     else:
         print("Usando modelo ARIMA")
-        modelo = ARIMA(serie, order=(1, d, 1))
+        modelo = ARIMA(df[COLUMNA_VALOR], order=(1, d, 1))
 
     resultado = modelo.fit()
 except Exception as e:
     print(f"Error al ajustar el modelo: {e}")
-    resultado = None  # Si no se puede ajustar el modelo, resultado es None
+    resultado = None
 
 # ---------- PRONÓSTICO ----------
 if resultado is not None:
     try:
-        pasos = 12  # Meses a predecir (ajusta según necesites)
-        pred = resultado.forecast(steps=pasos)
+        pasos = 365  # Días a predecir
+        pred = resultado.get_forecast(steps=pasos)
+        pred_index = pd.date_range(start=df.index[-1], periods=pasos + 1, freq='D')[1:]
+        pred_mean = pred.predicted_mean
+        pred_ci = pred.conf_int()
     except Exception as e:
         print(f"Error al realizar el pronóstico: {e}")
-        pred = None  # Si no se puede hacer el pronóstico, pred es None
+        pred_mean, pred_ci = None, None
 else:
-    pred = None
+    pred_mean, pred_ci = None, None
 
 # ---------- GRAFICAR ----------
-if pred is not None:
+if pred_mean is not None:
     try:
         plt.figure(figsize=(10, 5))
-        plt.plot(serie, label='Histórico')
-        plt.plot(pred, label='Pronóstico', color='red')
-        plt.title("Proyección de Ventas")
+        plt.plot(df[COLUMNA_VALOR], label='Histórico')
+        plt.plot(pred_index, pred_mean, label='Pronóstico', color='red')
+        plt.fill_between(pred_index, pred_ci.iloc[:, 0], pred_ci.iloc[:, 1], color='pink', alpha=0.3, label='Intervalo de confianza')
+        plt.title("Proyección de Ventas (Datos Diarios)")
         plt.xlabel("Fecha")
         plt.ylabel("Ventas")
         plt.legend()
